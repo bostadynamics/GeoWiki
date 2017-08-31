@@ -15,13 +15,26 @@ async def fetch_json(url):
 
 
 class BaseHandler(RequestHandler):
-    cache = dict()
-    usage = list()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cache = None
+
+    def prepare(self):
+        method = self.request.method
+        path = self.request.path
+        args = tuple((x, tuple(y)) for x, y in self.request.arguments.items())
+        self.cache = self.application.cache.get((method, path, args))
+        self.application.req_log.append(f'{method} {path} -> {args}')
+
+    def on_finish(self):
+        pass
 
 
 class GeoHandler(BaseHandler):
 
     async def get(self):
+        self.request
         addr = self.get_argument('address')
         cached_res = self.application.cache.get(('geoc', addr))
         if cached_res:
@@ -49,23 +62,31 @@ class WikiHandler(BaseHandler):
 
         wiki_qry = f'https://en.wikipedia.org/w/api.php?action=query&list=' \
                    f'geosearch&gscoord={lat}|{lng}&gsradius=10000&gslimit=10&format=json'
+        res = await self.fetch_wiki_art(wiki_qry)
+
+        self.application.cache[('wiki', (lat, lng))] = res
+        self.write(res)
+
+    async def fetch_wiki_art(self, wiki_qry):
         wiki_res = await fetch_json(wiki_qry)
         locations = wiki_res.get('query').get('geosearch')
         res = list()
         # TODO: add thumbnailURL
-        for item in locations:
+        for art in locations:
             res.append(
-                {'title': item.get('title'),
+                {'title': art.get('title'),
                  'thumbnailURL': None,
                  'coordinates':
-                     {'lat': item['lat'],
-                      'lon': item['lon']}})
+                     {'lat': art['lat'],
+                      'lon': art['lon']}})
         res = json.dumps(res)
-        self.application.cache[('wiki', (lat, lng))] = res
-        self.write(res)
+        return res
 
 
 class PurgeHandler(BaseHandler):
+
+    def get(self):
+        self.application.cache = dict()
 
     def post(self):
         self.application.cache = dict()
@@ -74,4 +95,4 @@ class PurgeHandler(BaseHandler):
 class UsageHandler(BaseHandler):
 
     def get(self):
-        pass
+        self.write(json.dumps(self.application.req_log))

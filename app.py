@@ -21,6 +21,6 @@ class App(Application):
 
 if __name__ == '__main__':
     parse_command_line()
-    app = App(urls)
+    app = App(urls, debug=True)
     app.listen(8888)
     IOLoop.current().start()
