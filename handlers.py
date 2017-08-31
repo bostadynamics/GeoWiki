@@ -32,7 +32,7 @@ class GeoHandler(BaseHandler):
         gmaps_res = await fetch_json(gmaps_qry)
         res = gmaps_res.get('results')[0]['geometry']['location']
         self.application.cache[('geoc', addr)] = res
-        # TODO: change 'lng' key to 'ion'
+        # TODO: change 'lng' key to 'lon'
         self.write(res)
 
 
@@ -67,7 +67,7 @@ class WikiHandler(BaseHandler):
 
 class PurgeHandler(BaseHandler):
 
-    def get(self):
+    def post(self):
         self.application.cache = dict()
 
 
