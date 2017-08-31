@@ -27,8 +27,12 @@ class BaseHandler(RequestHandler):
         self.cache = self.application.cache.get((method, path, args))
         self.application.req_log.append(f'{method} {path} -> {args}')
 
-    def on_finish(self):
-        pass
+    def cache_res(self, res):
+        method = self.request.method
+        path = self.request.path
+        args = tuple((x, tuple(y)) for x, y in self.request.arguments.items())
+
+        self.application.cache[(method, path, args)] = res
 
 
 class GeoHandler(BaseHandler):
@@ -36,15 +40,17 @@ class GeoHandler(BaseHandler):
     async def get(self):
         self.request
         addr = self.get_argument('address')
-        cached_res = self.application.cache.get(('geoc', addr))
-        if cached_res:
+
+        if self.cache:
             print('cached')
-            self.write(cached_res)
+            self.write(self.cache)
+            return
+
         gmaps_qry = f'https://maps.googleapis.com/maps/api/geocode/json?' \
                     f'address={addr}&key={options.gmaps_key}'
         gmaps_res = await fetch_json(gmaps_qry)
         res = gmaps_res.get('results')[0]['geometry']['location']
-        self.application.cache[('geoc', addr)] = res
+        self.cache_res(res)
         # TODO: change 'lng' key to 'lon'
         self.write(res)
 
@@ -54,17 +60,16 @@ class WikiHandler(BaseHandler):
     async def get(self):
         lat = self.get_argument('lat')
         lng = self.get_argument('lng')
-        cached_res = self.application.cache.get(('wiki', (lat, lng)))
-        if cached_res:
+        if self.cache:
             print('cached')
-            self.write(cached_res)
+            self.write(self.cache)
             return
 
         wiki_qry = f'https://en.wikipedia.org/w/api.php?action=query&list=' \
                    f'geosearch&gscoord={lat}|{lng}&gsradius=10000&gslimit=10&format=json'
         res = await self.fetch_wiki_art(wiki_qry)
 
-        self.application.cache[('wiki', (lat, lng))] = res
+        self.cache_res(res)
         self.write(res)
 
     async def fetch_wiki_art(self, wiki_qry):
